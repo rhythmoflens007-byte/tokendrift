@@ -1,0 +1,98 @@
+{
+  "$schema": "https://tr.designtokens.org/format/",
+  "color": {
+    "$type": "color",
+    "brand": {
+      "primary": {
+        "$value": "#2563eb",
+        "$type": "color",
+        "$description": "Primary brand blue"
+      },
+      "secondary": {
+        "$value": "#7c3aed",
+        "$type": "color",
+        "$description": "Secondary brand purple"
+      },
+      "blue": {
+        "$value": "#ff6b00",
+        "$type": "color"
+      }
+    },
+    "neutral": {
+      "white": {
+        "$value": "#ffffff",
+        "$type": "color",
+        "$description": "Pure white"
+      },
+      "gray": {
+        "$value": "#6b7280",
+        "$type": "color",
+        "$description": "Mid-tone gray"
+      }
+    },
+    "feedback": {
+      "error": {
+        "$value": "#dc2626",
+        "$type": "color",
+        "$description": "Error red"
+      }
+    }
+  },
+  "spacing": {
+    "$type": "dimension",
+    "sm": {
+      "$value": "8px",
+      "$type": "dimension",
+      "$description": "Small spacing"
+    },
+    "md": {
+      "$value": "16px",
+      "$type": "dimension",
+      "$description": "Medium spacing"
+    },
+    "lg": {
+      "$value": "24px",
+      "$type": "dimension",
+      "$description": "Large spacing"
+    },
+    "xl": {
+      "$value": "32px",
+      "$type": "dimension",
+      "$description": "Extra-large spacing"
+    },
+    "2xl": {
+      "$value": "48px",
+      "$type": "dimension",
+      "$description": "2x extra-large spacing"
+    }
+  },
+  "typography": {
+    "fontSize": {
+      "xs": {
+        "$value": "12px",
+        "$type": "dimension",
+        "$description": "Extra-small font size"
+      },
+      "sm": {
+        "$value": "14px",
+        "$type": "dimension",
+        "$description": "Small font size"
+      },
+      "base": {
+        "$value": "16px",
+        "$type": "dimension",
+        "$description": "Base font size"
+      },
+      "lg": {
+        "$value": "18px",
+        "$type": "dimension",
+        "$description": "Large font size"
+      },
+      "xl": {
+        "$value": "20px",
+        "$type": "dimension",
+        "$description": "Extra-large font size"
+      }
+    }
+  }
+}

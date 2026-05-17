@@ -1,0 +1,72 @@
+{
+  "name": "token-drift-detector",
+  "displayName": "Token Drift Detector",
+  "description": "Detects hard-coded design values that should be design tokens",
+  "version": "0.1.0",
+  "publisher": "pollenz",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pollenz/token-drift-detector"
+  },
+  "homepage": "https://github.com/pollenz/token-drift-detector#readme",
+  "bugs": {
+    "url": "https://github.com/pollenz/token-drift-detector/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters"
+  ],
+  "keywords": [
+    "design tokens",
+    "dtcg",
+    "css",
+    "lint",
+    "design system"
+  ],
+  "activationEvents": [
+    "onLanguage:css",
+    "onLanguage:scss",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:vue",
+    "onLanguage:astro"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tokenDrift.useToken",
+        "title": "Token Drift: Use Token"
+      },
+      {
+        "command": "tokenDrift.markIntentional",
+        "title": "Token Drift: Mark as Intentional"
+      },
+      {
+        "command": "tokenDrift.reloadTokens",
+        "title": "Token Drift: Reload tokens.dtcg.json"
+      },
+      {
+        "command": "tokenDrift.suggestNewToken",
+        "title": "Token Drift: Suggest as New Token"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.1",
+    "typescript": "^5.3.0"
+  }
+}

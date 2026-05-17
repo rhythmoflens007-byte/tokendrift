@@ -1,0 +1,26 @@
+# Source — compiled to out/ by vsce prepublish
+src/**
+tsconfig.json
+
+# Dev tooling
+node_modules/**
+.github/**
+scripts/**
+
+# Dashboard — not part of the extension itself
+dashboard/**
+
+# Runtime data files (live in the user's workspace, not the extension)
+tokens.dtcg.json
+token-exceptions.json
+pending-tokens.json
+dashboard-data.json
+
+# Git / editor
+.gitignore
+.vscode/**
+*.vsix
+
+# Test files
+**/*.test.ts
+**/*.spec.ts

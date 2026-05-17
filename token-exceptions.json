@@ -1,0 +1,18 @@
+{
+  "src/.test {.css::46": {
+    "value": "#ccc",
+    "token_match": "color.brand.blue",
+    "reason": "",
+    "logged_date": "2026-05-17T13:45:56.709Z",
+    "file": "src/.test {.css",
+    "line": 46
+  },
+  "src/.test {.css::24": {
+    "value": "#ff6b00",
+    "token_match": "color.brand.blue",
+    "reason": "",
+    "logged_date": "2026-05-17T13:57:29.672Z",
+    "file": "src/.test {.css",
+    "line": 24
+  }
+}

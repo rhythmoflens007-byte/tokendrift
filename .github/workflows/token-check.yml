@@ -1,0 +1,303 @@
+name: Token Drift Check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write        # required for committing dashboard-data.json
+  pull-requests: write   # required for posting PR comments
+  pages: write           # required for GitHub Pages deploy
+  id-token: write        # required for OIDC Pages deploy
+
+jobs:
+  # ── Job 1: Scan ─────────────────────────────────────────────────────────────
+  check-tokens:
+    name: Scan for hard-coded design values
+    runs-on: ubuntu-latest
+
+    outputs:
+      violation_count: ${{ steps.scan.outputs.violation_count }}
+      files_scanned:   ${{ steps.changed.outputs.file_count }}
+
+    steps:
+      # ── 1. Checkout with full history so git diff works ─────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Resolve which files changed ──────────────────────────────────────
+      - name: Get changed code files
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.sha }}"
+          else
+            BASE="HEAD~1"
+            HEAD="HEAD"
+          fi
+
+          FILES=$(git diff --name-only --diff-filter=ACM "$BASE" "$HEAD" \
+            | grep -E '\.(tsx?|jsx?|css|scss|sass|less|vue|astro|html)$' \
+            || true)
+
+          FILE_COUNT=$(echo "$FILES" | grep -c . || echo 0)
+
+          echo "Found changed files:"
+          echo "$FILES"
+
+          {
+            echo "files<<EOF"
+            echo "$FILES"
+            echo "EOF"
+            echo "file_count=${FILE_COUNT}"
+          } >> "$GITHUB_OUTPUT"
+
+      # ── 3. Extract token values from tokens.dtcg.json ───────────────────────
+      - name: Extract token values
+        id: tokens
+        run: |
+          if [ ! -f tokens.dtcg.json ]; then
+            echo "::warning::tokens.dtcg.json not found — skipping token value extraction."
+            echo "color_values=" >> "$GITHUB_OUTPUT"
+            echo "dimension_values=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          COLOR_VALUES=$(jq -r \
+            '[.. | objects | select(has("$value") and (."$type" == "color")) | ."$value"] | unique | .[]' \
+            tokens.dtcg.json | tr '[:upper:]' '[:lower:]' | sort -u)
+
+          DIM_VALUES=$(jq -r \
+            '[.. | objects | select(has("$value") and (."$type" == "dimension")) | ."$value"] | unique | .[]' \
+            tokens.dtcg.json | sort -u)
+
+          {
+            echo "color_values<<EOF"
+            echo "$COLOR_VALUES"
+            echo "EOF"
+            echo "dimension_values<<EOF"
+            echo "$DIM_VALUES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # ── 4. Scan changed files and collect violations ─────────────────────────
+      - name: Scan for violations
+        id: scan
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          COLOR_VALUES:  ${{ steps.tokens.outputs.color_values }}
+          DIM_VALUES:    ${{ steps.tokens.outputs.dimension_values }}
+        run: |
+          VIOLATIONS=""
+          VIOLATION_COUNT=0
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changed code files to scan."
+            echo "violation_count=0" >> "$GITHUB_OUTPUT"
+            echo "violations=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          while IFS= read -r FILE; do
+            [ -z "$FILE" ] && continue
+            [ ! -f "$FILE" ] && continue
+
+            # Skip lines marked with token-skip-line
+            # ── Hex colour scan ───────────────────────────────────────────────
+            while IFS= read -r TOKEN_COLOR; do
+              [ -z "$TOKEN_COLOR" ] && continue
+
+              MATCHES=$(grep -niE "(^|[^-a-zA-Z0-9\"])${TOKEN_COLOR//\#/\\\#}([^a-zA-Z0-9\"]|$)" \
+                "$FILE" 2>/dev/null || true)
+
+              while IFS= read -r MATCH_LINE; do
+                [ -z "$MATCH_LINE" ] && continue
+
+                LINE_NUM=$(echo "$MATCH_LINE" | cut -d: -f1)
+                LINE_TEXT=$(echo "$MATCH_LINE" | cut -d: -f2-)
+
+                TRIMMED=$(echo "$LINE_TEXT" | sed 's/^[[:space:]]*//')
+                if echo "$TRIMMED" | grep -qE '^(//|/\*|\*)'; then continue; fi
+                if echo "$LINE_TEXT" | grep -q "token-skip-line"; then continue; fi
+                if echo "$LINE_TEXT" | grep -qE "var\(--[^)]*${TOKEN_COLOR//\#/\\#}"; then continue; fi
+
+                EXCEPTION_KEY="${FILE}::${LINE_NUM}"
+                EXCEPTED=false
+                if [ -f token-exceptions.json ]; then
+                  if jq -e --arg k "$EXCEPTION_KEY" '.[$k]' token-exceptions.json > /dev/null 2>&1; then
+                    EXCEPTED=true
+                  fi
+                fi
+
+                if [ "$EXCEPTED" = "false" ]; then
+                  VIOLATIONS="${VIOLATIONS}\n| \`${FILE}\` | ${LINE_NUM} | \`${TOKEN_COLOR}\` | color token |"
+                  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+                fi
+              done <<< "$MATCHES"
+            done <<< "$COLOR_VALUES"
+
+            # ── Pixel dimension scan ──────────────────────────────────────────
+            while IFS= read -r TOKEN_DIM; do
+              [ -z "$TOKEN_DIM" ] && continue
+
+              MATCHES=$(grep -nE "\b${TOKEN_DIM}\b" "$FILE" 2>/dev/null || true)
+
+              while IFS= read -r MATCH_LINE; do
+                [ -z "$MATCH_LINE" ] && continue
+
+                LINE_NUM=$(echo "$MATCH_LINE" | cut -d: -f1)
+                LINE_TEXT=$(echo "$MATCH_LINE" | cut -d: -f2-)
+
+                TRIMMED=$(echo "$LINE_TEXT" | sed 's/^[[:space:]]*//')
+                if echo "$TRIMMED" | grep -qE '^(//|/\*|\*)'; then continue; fi
+                if echo "$LINE_TEXT" | grep -q "token-skip-line"; then continue; fi
+                if echo "$LINE_TEXT" | grep -qE "var\(--"; then continue; fi
+
+                EXCEPTION_KEY="${FILE}::${LINE_NUM}"
+                EXCEPTED=false
+                if [ -f token-exceptions.json ]; then
+                  if jq -e --arg k "$EXCEPTION_KEY" '.[$k]' token-exceptions.json > /dev/null 2>&1; then
+                    EXCEPTED=true
+                  fi
+                fi
+
+                if [ "$EXCEPTED" = "false" ]; then
+                  VIOLATIONS="${VIOLATIONS}\n| \`${FILE}\` | ${LINE_NUM} | \`${TOKEN_DIM}\` | dimension token |"
+                  VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+                fi
+              done <<< "$MATCHES"
+            done <<< "$DIM_VALUES"
+
+          done <<< "$CHANGED_FILES"
+
+          {
+            echo "violation_count=${VIOLATION_COUNT}"
+            echo "violations<<EOF"
+            printf "%b" "$VIOLATIONS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Total violations: $VIOLATION_COUNT"
+
+      # ── 5. Post structured comment on PR if violations found ─────────────────
+      - name: Comment on PR
+        if: >
+          github.event_name == 'pull_request' &&
+          steps.scan.outputs.violation_count != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const count = Number('${{ steps.scan.outputs.violation_count }}');
+            const rows  = `${{ steps.scan.outputs.violations }}`.trim();
+
+            const body = [
+              `### Token Drift: ${count} violation${count === 1 ? '' : 's'} detected`,
+              '',
+              'The following hard-coded values match design tokens in `tokens.dtcg.json`.',
+              'Fix by replacing with the token reference, or use the VS Code extension',
+              'to mark as intentional.',
+              '',
+              '| File | Line | Value | Type |',
+              '|------|------|-------|------|',
+              rows,
+              '',
+              '**Options:**',
+              '- Replace with `var(--token-name)` using the VS Code quick-fix lightbulb',
+              '- Add `// token-skip-line` to bypass a single line intentionally',
+              '- Mark as intentional via the VS Code extension (writes to `token-exceptions.json`)',
+              '- Set `ALLOW_NEW_COLORS: true` in the workflow env to warn instead of fail',
+              '',
+              '<sub>Generated by Token Drift Detector</sub>',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      # ── 6. Enforce — respects ALLOW_NEW_COLORS escape hatch ─────────────────
+      - name: Enforce clean build
+        if: >
+          steps.scan.outputs.violation_count != '0' &&
+          env.ALLOW_NEW_COLORS != 'true'
+        env:
+          ALLOW_NEW_COLORS: ${{ vars.ALLOW_NEW_COLORS || 'false' }}
+        run: |
+          echo "::error::${{ steps.scan.outputs.violation_count }} token drift violation(s) found."
+          echo "Set repository variable ALLOW_NEW_COLORS=true to warn instead of fail."
+          exit 1
+
+      - name: Warn (ALLOW_NEW_COLORS mode)
+        if: >
+          steps.scan.outputs.violation_count != '0' &&
+          env.ALLOW_NEW_COLORS == 'true'
+        env:
+          ALLOW_NEW_COLORS: ${{ vars.ALLOW_NEW_COLORS || 'false' }}
+        run: |
+          echo "::warning::${{ steps.scan.outputs.violation_count }} violation(s) found — ALLOW_NEW_COLORS=true, not failing."
+
+      - name: All checks passed
+        if: steps.scan.outputs.violation_count == '0'
+        run: echo "No token drift violations found."
+
+      # ── 7. Generate dashboard-data.json and commit ───────────────────────────
+      - name: Generate dashboard data
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          bash scripts/generate-dashboard-data.sh \
+            "${{ steps.scan.outputs.violation_count }}" \
+            "${{ steps.changed.outputs.file_count }}"
+
+      - name: Commit dashboard data
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard-data.json
+          git diff --cached --quiet || \
+            git commit -m "chore: update dashboard data [skip ci]"
+          git push
+
+  # ── Job 2: Deploy dashboard to GitHub Pages (main only) ─────────────────────
+  deploy-dashboard:
+    name: Deploy dashboard to GitHub Pages
+    needs: check-tokens
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main   # pick up the dashboard-data.json commit
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp dashboard/index.html   _site/index.html
+          cp token-exceptions.json  _site/token-exceptions.json
+          cp dashboard-data.json    _site/dashboard-data.json
+          cp pending-tokens.json    _site/pending-tokens.json
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

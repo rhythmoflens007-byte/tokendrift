@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-05-17T10:30:00Z",
+  "repository": "pollenz/design-system",
+  "branch": "main",
+  "scan_summary": {
+    "files_scanned": 47,
+    "violations_found": 3,
+    "exceptions_logged": 2,
+    "pending_tokens": 0,
+    "compliance_rate": 91
+  },
+  "weekly_trend": [
+    { "week": "W10", "compliance": 74, "violations": 14 },
+    { "week": "W11", "compliance": 78, "violations": 12 },
+    { "week": "W12", "compliance": 81, "violations": 10 },
+    { "week": "W13", "compliance": 83, "violations": 9 },
+    { "week": "W14", "compliance": 86, "violations": 7 },
+    { "week": "W15", "compliance": 88, "violations": 6 },
+    { "week": "W16", "compliance": 90, "violations": 4 },
+    { "week": "W17", "compliance": 91, "violations": 3 }
+  ]
+}
